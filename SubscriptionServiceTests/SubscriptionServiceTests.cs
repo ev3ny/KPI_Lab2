@@ -41,7 +41,7 @@ namespace SubscriptionServiceTests
             _repo.Setup(r => r.GetById(1)).Returns((Member?)null);
 
             // Act
-            try { _service.RenewSubscription(1, 100m, 30); } catch {}
+            try { _service.RenewSubscription(1, 100m, 30); } catch { }
 
             // Assert
             _repo.Verify(r => r.Update(It.IsAny<Member>()), Times.Never);
@@ -84,10 +84,11 @@ namespace SubscriptionServiceTests
         }
 
         /// <summary>
-        /// Test: Renewing a subscription with invalid payment should return false.
+        /// Test: Renewing a subscription with invalid payment should return false
+        /// and must not update repository and send notifications.
         /// </summary>
         [Fact]
-        public void RenewSubscription_InvalidPayment_ReturnsFalse()
+        public void RenewSubscription_InvalidPayment_ReturnsFalseAndNeverUpdatesAndNotifies()
         {
             // Arrange
             var member = new Member { Id = 2, IsActive = false };
@@ -99,24 +100,42 @@ namespace SubscriptionServiceTests
 
             // Assert
             Assert.False(result);
+            _repo.Verify(r => r.Update(It.IsAny<Member>()), Times.Never);
+            _notify.Verify(n => n.SendNotification(It.IsAny<string>(), It.IsAny<int>()), Times.Never);
         }
 
         /// <summary>
-        /// Test: Deactivating expired members ensures the expired member is present in the collection.
+        /// Test: Member with non-expired subscription must not be deactivated.
         /// </summary>
         [Fact]
-        public void DeactivateExpiredMembers_WhenCalled_CollectionContainsExpiredMember()
+        public void DeactivateExpiredMembers_NonExpiredMember_RemainsActive()
         {
             // Arrange
-            var expiredMember = new Member { Id = 10, IsActive = true, SubscriptionEnd = DateTime.Now.AddDays(-2) };
-            var membersList = new List<Member> { expiredMember };
-            _repo.Setup(r => r.GetAll()).Returns(membersList);
+            var activeMember = new Member { Id = 11, IsActive = true, SubscriptionEnd = DateTime.Now.AddDays(10) };
+            _repo.Setup(r => r.GetAll()).Returns(new List<Member> { activeMember });
 
             // Act
             _service.DeactivateExpiredMembers();
 
             // Assert
-            Assert.Contains(expiredMember, membersList);
+            Assert.True(activeMember.IsActive);
+        }
+
+        /// <summary>
+        /// Test: Member without SubscriptionEnd date must not be deactivated.
+        /// </summary>
+        [Fact]
+        public void DeactivateExpiredMembers_NullSubscriptionEnd_RemainsActive()
+        {
+            // Arrange
+            var memberWithoutDate = new Member { Id = 12, IsActive = true, SubscriptionEnd = null };
+            _repo.Setup(r => r.GetAll()).Returns(new List<Member> { memberWithoutDate });
+
+            // Act
+            _service.DeactivateExpiredMembers();
+
+            // Assert
+            Assert.True(memberWithoutDate.IsActive);
         }
 
         /// <summary>
