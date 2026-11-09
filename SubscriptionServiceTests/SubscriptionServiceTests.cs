@@ -40,18 +40,16 @@ namespace SubscriptionServiceTests
             // Arrange
             _repo.Setup(r => r.GetById(1)).Returns((Member?)null);
 
-            // Act
-            try { _service.RenewSubscription(1, 100m, 30); } catch { }
-
-            // Assert
+            // Act & Assert
+            Assert.Throws<ArgumentException>(() => _service.RenewSubscription(1, 100m, 30));
             _repo.Verify(r => r.Update(It.IsAny<Member>()), Times.Never);
         }
 
         /// <summary>
-        /// Test: Renewing a subscription with valid payment should return true.
+        /// Test: Renewing a subscription with valid payment should return true and sends notification.
         /// </summary>
         [Fact]
-        public void RenewSubscription_ValidPayment_ReturnsTrue()
+        public void RenewSubscription_ValidPayment_ReturnsTrueAndSendNotification()
         {
             // Arrange
             var member = new Member { Id = 1, IsActive = false };
@@ -63,6 +61,7 @@ namespace SubscriptionServiceTests
 
             // Assert
             Assert.True(result);
+            _notify.Verify(n => n.SendNotification("Subscription renewed!", 1), Times.Once);
         }
 
         /// <summary>
@@ -153,6 +152,8 @@ namespace SubscriptionServiceTests
 
             // Assert
             Assert.False(expiredMember.IsActive);
+            _repo.Verify(r => r.Update(expiredMember), Times.Once);
+            _notify.Verify(n => n.SendNotification("Membership expired", 10), Times.Once);
         }
 
         /// <summary>
